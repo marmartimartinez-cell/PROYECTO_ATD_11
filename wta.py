@@ -1,77 +1,66 @@
-
-
-
 import requests as r
 from selenium import webdriver
 from selenium.webdriver.common.by import By
 import time
 
+def abrir_Web_WTA(url):
+    driver = webdriver.Chrome()
+    driver.get(url)
+    driver.implicitly_wait(10)
+    aceptar_cookies(driver)
+    time.sleep(5)
+    cerrar_popup_weblayer(driver, "weblayer--box-web-push-subscription")
+    time.sleep(1.5)
+    cerrar_popup_weblayer(driver, "weblayer--box-cookieless")
+    return driver
 
-# FUNCIÓN 1: Aceptar cookies
 def aceptar_cookies(driver):
     driver.implicitly_wait(10)
-
     try:
         aceptar = driver.find_element(By.ID, "onetrust-accept-btn-handler")
         aceptar.click()
-
     except Exception as e:
         print("No se encontró el botón de aceptar cookies:", e)
 
 
-# FUNCIÓN 2: Cerrar pop-ups
+# Como tenemos que hacer click en dos diferentes y ambos en shadowbox, vamos a crear funcion
 def cerrar_popup_weblayer(driver, nombre_clase_popup):
-
     try:
+        # 1. Encontrar el elemento "host" (el div que contiene el Shadow Root)
+        # Iteramos sobre los divs porque el host suele no tener ID o clase visible
         host_elements = driver.find_elements(By.TAG_NAME, "div")
         host = None
-
-        # Buscamos el Shadow Root que contiene el pop-up
+        
         for element in host_elements:
             try:
+                # Intentamos acceder al shadow root
                 shadow = element.shadow_root
-
+                # Verificamos si dentro está el popup que buscamos
                 if shadow.find_elements(By.CSS_SELECTOR, f".{nombre_clase_popup}"):
                     host = element
                     break
-
             except:
+                # Si el div no tiene shadow root, lanza excepción y continuamos
                 continue
-
+        
         if not host:
-            print("No se encontró el popup:", nombre_clase_popup)
+            print(f"⚠️ No se encontró el popup: {nombre_clase_popup}")
             return False
 
+        # 2. Acceder al Shadow Root
         shadow_root = host.shadow_root
 
-        boton_close = shadow_root.find_element(
-            By.CSS_SELECTOR, "button[aria-label='Close']"
-        )
+        # 3. Buscar el botón de cerrar (X) y hacer clic
+        # Usamos aria-label="Close" porque es el estándar en ambos popups
+        boton_close = shadow_root.find_element(By.CSS_SELECTOR, "button[aria-label='Close']")
         boton_close.click()
-
+        
+        print(f"✅ Popup '{nombre_clase_popup}' cerrado exitosamente.")
         return True
 
     except Exception as e:
-        print("Error al cerrar el popup:", e)
+        print(f"❌ Error al intentar cerrar el popup '{nombre_clase_popup}': {e}")
         return False
-
-
-# FUNCIÓN 3: Abrir la web WTA
-def abrir_Web_WTA(url):
-
-    driver = webdriver.Chrome()
-    driver.get(url)
-    driver.implicitly_wait(10)
-
-    aceptar_cookies(driver)
-
-    time.sleep(5)
-    cerrar_popup_weblayer(driver, "weblayer--box-web-push-subscription")
-
-    time.sleep(1.5)
-    cerrar_popup_weblayer(driver, "weblayer--box-cookieless")
-
-    return driver
 
 
 # FUNCIÓN 4: Extraer los torneos solicitados
@@ -84,29 +73,17 @@ def extraer_wta(nombres_torneos):
     url = "https://www.wtatennis.com/tournaments"
     driver = abrir_Web_WTA(url)
 
-    tournaments = {}
-
-    # Obtenemos los nombres de los torneos y sus enlaces
+       tournaments = {}
     try:
-        driver.implicitly_wait(10)
-        cambio_all = driver.find_element(By.CLASS_NAME, "tournament-list__status-filter")
-        cambio_all.click()
-    except Exception as e:
-        print("No se pudo hacer clic en el filtro 'All':", e)
-    driver.implicitly_wait(10)
-    
-    try:
-        torneos = driver.find_elements(
-            By.CLASS_NAME, "tournament-list__absolute-link"
-        )
+        torneos = driver.find_elements(By.CLASS_NAME, "tournament-list__absolute-link")
 
         for torneo in torneos:
-            nombre = torneo.get_attribute("title")
-            enlace = torneo.get_attribute("href")
-            tournaments[nombre] = enlace
+            nombre_torneo = torneo.get_attribute("title")
+            enlace_torneo = torneo.get_attribute("href")
 
-        print("Número de torneos encontrados:", len(tournaments))
+            tournaments[nombre_torneo] = enlace_torneo
 
+        
         for nombre in tournaments:
             print(nombre)
 
