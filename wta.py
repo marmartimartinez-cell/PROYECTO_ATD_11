@@ -73,7 +73,7 @@ def extraer_wta(nombres_torneos):
     url = "https://www.wtatennis.com/tournaments"
     driver = abrir_Web_WTA(url)
 
-       tournaments = {}
+    tournaments = {}
     try:
         torneos = driver.find_elements(By.CLASS_NAME, "tournament-list__absolute-link")
 
