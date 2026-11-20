@@ -1,80 +1,80 @@
-# -*- coding: utf-8 -*-
-"""
-Created on Fri Oct 30 09:40:41 2026
+import requests
 
-@author: mcertab
-"""
 
-import openmeteo_requests
+def obtener_coordenadas(ciudad, pais=""):
+    # Geocoding: convertir el nombre de una ciudad en coordenadas.
+    url = "https://geocoding-api.open-meteo.com/v1/search"
+    busqueda = ciudad + ", " + pais if pais else ciudad
+    parametros = {"name": busqueda, "count": 1, "language": "en"}
 
-import pandas as pd
-import requests_cache
-from retry_requests import retry
+    respuesta = requests.get(url, params=parametros, timeout=20)
+    respuesta.raise_for_status()
+    resultados = respuesta.json().get("results", [])
 
-# Setup the Open-Meteo API client with cache and retry on error
-cache_session = requests_cache.CachedSession('.cache', expire_after = 3600)
-retry_session = retry(cache_session, retries = 5, backoff_factor = 0.2)
-openmeteo = openmeteo_requests.Client(session = retry_session)
+    if not resultados:
+        raise ValueError("No se han encontrado coordenadas para " + busqueda)
 
-# Make sure all required weather variables are listed here
-# The order of variables in hourly or daily is important to assign them correctly below
-url = "https://historical-forecast-api.open-meteo.com/v1/forecast"
-params = {
-	"latitude": 39.4699,
-	"longitude": -0.3763,
-	"start_date": "2026-10-20",
-	"end_date": "2026-10-21",
-	"hourly": ["temperature_2m", "relative_humidity_2m", "apparent_temperature", "precipitation", "visibility", "wind_speed_10m", "wind_speed_80m", "wind_speed_100m", "wind_speed_120m", "wind_speed_200m", "wind_speed_180m"],
-	"timezone": "auto",
-}
-responses = openmeteo.weather_api(url, params = params)
+    lugar = resultados[0]
+    return lugar["latitude"], lugar["longitude"]
 
-# Process first location. Add a for-loop for multiple locations or weather models
-response = responses[0]
-print(f"Coordinates: {response.Latitude()}°N {response.Longitude()}°E")
-print(f"Elevation: {response.Elevation()} m asl")
-print(f"Timezone: {response.Timezone()}{response.TimezoneAbbreviation()}")
-print(f"Timezone difference to GMT+0: {response.UtcOffsetSeconds()}s")
 
-# Process hourly data. The order of variables needs to be the same as requested.
-hourly = response.Hourly()
-hourly_temperature_2m = hourly.Variables(0).ValuesAsNumpy()
-hourly_relative_humidity_2m = hourly.Variables(1).ValuesAsNumpy()
-hourly_apparent_temperature = hourly.Variables(2).ValuesAsNumpy()
-hourly_precipitation = hourly.Variables(3).ValuesAsNumpy()
-hourly_visibility = hourly.Variables(4).ValuesAsNumpy()
-hourly_wind_speed_10m = hourly.Variables(5).ValuesAsNumpy()
-hourly_wind_speed_80m = hourly.Variables(6).ValuesAsNumpy()
-hourly_wind_speed_100m = hourly.Variables(7).ValuesAsNumpy()
-hourly_wind_speed_120m = hourly.Variables(8).ValuesAsNumpy()
-hourly_wind_speed_200m = hourly.Variables(9).ValuesAsNumpy()
-hourly_wind_speed_180m = hourly.Variables(10).ValuesAsNumpy()
+def obtener_tiempo_historico(latitud, longitud, fecha_inicio, fecha_fin):
+    # Consultamos la meteorología de un intervalo ya pasado.
+    url = "https://archive-api.open-meteo.com/v1/archive"
+    parametros = {
+        "latitude": latitud,
+        "longitude": longitud,
+        "start_date": fecha_inicio,
+        "end_date": fecha_fin,
+        "daily": [
+            "temperature_2m_mean",
+            "temperature_2m_max",
+            "temperature_2m_min",
+            "apparent_temperature_mean",
+            "relative_humidity_2m_mean",
+            "precipitation_sum",
+            "wind_speed_10m_mean"
+        ],
+        "timezone": "auto"
+    }
 
-hourly_data = {
-	"date": pd.date_range(
-		start = pd.to_datetime(hourly.Time(), unit = "s", utc = True),
-		end =  pd.to_datetime(hourly.TimeEnd(), unit = "s", utc = True),
-		freq = pd.Timedelta(seconds = hourly.Interval()),
-		inclusive = "left"
-	).tz_convert(response.Timezone().decode())
-}
+    respuesta = requests.get(url, params=parametros, timeout=30)
+    respuesta.raise_for_status()
+    datos = respuesta.json().get("daily", {})
 
-hourly_data["temperature_2m"] = hourly_temperature_2m
-hourly_data["relative_humidity_2m"] = hourly_relative_humidity_2m
-hourly_data["apparent_temperature"] = hourly_apparent_temperature
-hourly_data["precipitation"] = hourly_precipitation
-hourly_data["visibility"] = hourly_visibility
-hourly_data["wind_speed_10m"] = hourly_wind_speed_10m
-hourly_data["wind_speed_80m"] = hourly_wind_speed_80m
-hourly_data["wind_speed_100m"] = hourly_wind_speed_100m
-hourly_data["wind_speed_120m"] = hourly_wind_speed_120m
-hourly_data["wind_speed_200m"] = hourly_wind_speed_200m
-hourly_data["wind_speed_180m"] = hourly_wind_speed_180m
+    def media(variable):
+        valores = []
+        for valor in datos.get(variable, []):
+            if valor is not None:
+                valores.append(valor)
+        if not valores:
+            raise ValueError("Faltan datos de: " + variable)
+        return round(sum(valores) / len(valores), 1)
 
-hourly_dataframe = pd.DataFrame(data = hourly_data)
-print("\nHourly data\n", hourly_dataframe)
+    precipitaciones = datos.get("precipitation_sum", [])
+    total_lluvia = 0
+    datos_lluvia = 0
+    for valor in precipitaciones:
+        if valor is not None:
+            total_lluvia += valor
+            datos_lluvia += 1
+    if datos_lluvia == 0:
+        raise ValueError("Faltan datos de precipitaciones")
 
-hourly_dataframe.to_csv(
-    r"C:\Users\usuario\Downloads\weather_valencia.csv",
-    index=False
-)
+    # Contamos los días con lluvia apreciable (1 mm o más).
+    dias_con_lluvia = 0
+    for lluvia in precipitaciones:
+        if lluvia is not None and lluvia >= 1:
+            dias_con_lluvia += 1
+
+    return {
+        "dias_con_lluvia": dias_con_lluvia,
+        "dias_analizados": datos_lluvia,
+        "temperatura_media_c": media("temperature_2m_mean"),
+        "temperatura_maxima_media_c": media("temperature_2m_max"),
+        "temperatura_minima_media_c": media("temperature_2m_min"),
+        "sensacion_termica_media_c": media("apparent_temperature_mean"),
+        "humedad_media_pct": media("relative_humidity_2m_mean"),
+        "precipitacion_total_mm": round(total_lluvia, 1),
+        "viento_medio_kmh": media("wind_speed_10m_mean")
+    }
