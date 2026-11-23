@@ -1,7 +1,7 @@
 import re
 from datetime import date, timedelta
 
-from wta import extraer_wta
+from wta_weather import extraer_wta
 from weatherAPI import obtener_coordenadas, obtener_tiempo_historico
 
 
