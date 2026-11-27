@@ -2,18 +2,21 @@ import requests
 
 
 def obtener_coordenadas(ciudad, pais=""):
-    # Geocoding: convertir el nombre de una ciudad en coordenadas.
     url = "https://geocoding-api.open-meteo.com/v1/search"
-    busqueda = ciudad + ", " + pais if pais else ciudad
-    parametros = {"name": busqueda, "count": 1, "language": "en"}
-
+    parametros = {"name": ciudad, "count": 10, "language": "en"}
     respuesta = requests.get(url, params=parametros, timeout=20)
     respuesta.raise_for_status()
     resultados = respuesta.json().get("results", [])
 
     if not resultados:
-        raise ValueError("No se han encontrado coordenadas para " + busqueda)
+        raise ValueError("No se han encontrado coordenadas para " + ciudad)
 
+    if pais:
+        for lugar in resultados:
+            if lugar.get("country", "").casefold() == pais.casefold():
+                return lugar["latitude"], lugar["longitude"]
+
+    # Si el país no coincide exactamente, usamos la primera coincidencia.
     lugar = resultados[0]
     return lugar["latitude"], lugar["longitude"]
 

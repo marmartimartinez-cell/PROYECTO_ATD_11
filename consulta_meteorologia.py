@@ -154,34 +154,3 @@ def meteorologia_torneo(nombres_torneos, cantidad_anios=3):
             resultados[nombre] = {"error": str(error)}
 
     return resultados
-
-
-if __name__ == "__main__":
-    entrada = input("Nombre del torneo (o varios separados por comas): ")
-    nombres = []
-    for nombre in entrada.split(","):
-        if nombre.strip():
-            nombres.append(nombre.strip())
-
-    try:
-        resultados = meteorologia_torneo(nombres)
-        for torneo, datos in resultados.items():
-            print("\nTORNEO:", torneo)
-            if "error" in datos:
-                print("Error:", datos["error"])
-                continue
-            print("Ciudad:", datos["ciudad"], "-", datos["pais"])
-            print("Fechas WTA:", datos["fecha_wta"])
-            print("Histórico:")
-            for anio in datos["historico"]:
-                print(anio)
-            print("Promedio histórico:", datos["promedio"])
-            print("Interpretación de las condiciones habituales:")
-            print("  Lluvia:", datos["interpretacion"]["lluvia"])
-            print("  Viento:", datos["interpretacion"]["viento"])
-            print("  Temperatura:", datos["interpretacion"]["temperatura"])
-            print("  Porcentaje de días con lluvia:", datos["interpretacion"]["porcentaje_dias_con_lluvia"], "%")
-        if not resultados:
-            print("No se ha encontrado ningún torneo. Revisa el nombre que aparece en la WTA.")
-    except Exception as error:
-        print("No se pudo completar la consulta:", error)

@@ -58,10 +58,20 @@ def cerrar_popup_weblayer(driver, nombre_clase_popup):
 
 def cargar_jugadoras(driver, limite):
     print(f"Verificando si es necesario cargar hasta {limite} jugadoras...")
-    driver.implicitly_wait(5) 
-    
+    driver.implicitly_wait(5)
+    ultimo_total = -1
+    sin_avance = 0
+
     while True:
         filas = driver.find_elements(By.CSS_SELECTOR, "tr.player-row")
+        if len(filas) <= ultimo_total:
+            sin_avance += 1
+        else:
+            sin_avance = 0
+        ultimo_total = len(filas)
+        if sin_avance >= 2:
+            print("No aparecen más jugadoras; detenemos la carga.")
+            break
         
         if len(filas) >= limite:
             print(f"✅ Se han cargado {len(filas)} jugadoras. Límite alcanzado.")
@@ -111,117 +121,81 @@ def extraer_datos_ranking(driver):
 # ==========================================
 # SCRIPT PRINCIPAL
 # ==========================================
-if __name__ == "__main__":
+
+def cambios_ranking(cantidad=10, limite=300):
+    """Compara el ranking WTA actual con el de la semana anterior."""
     driver = abrir_Web_WTA(URL)
+    try:
+        print("Extrayendo ranking de la semana actual...")
+        cargar_jugadoras(driver, limite)
+        time.sleep(1)
+        datos_actuales = extraer_datos_ranking(driver)
 
-    # 1. EXTRAER SEMANA ACTUAL
-    print("\n--- SEMANA ACTUAL ---")
-    cargar_jugadoras(driver, MAX_JUGADORAS)
-    time.sleep(1) 
-    datos_actuales = extraer_datos_ranking(driver)
-    
-    # 2. CAMBIAR A LA SEMANA ANTERIOR
-    print("\n--- CAMBIANDO A LA SEMANA ANTERIOR ---")
-    driver.implicitly_wait(10)
-    driver.execute_script("window.scrollTo(0, 0);")
-    time.sleep(1.5)
-    
-    btn_filter = driver.find_element(By.CSS_SELECTOR, "button.js-filter-btn")
-    driver.execute_script("arguments[0].click();", btn_filter)
-    time.sleep(1.5)
-    
-    btn_date = driver.find_element(By.CSS_SELECTOR, "button[data-target-screen='date']")
-    driver.execute_script("arguments[0].click();", btn_date)
-    time.sleep(1.5)
+        print("Seleccionando la semana anterior...")
+        driver.implicitly_wait(10)
+        driver.execute_script("window.scrollTo(0, 0);")
+        time.sleep(1.5)
 
-    wait = WebDriverWait(driver, 10)
-    fila_seleccionada = wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, "tr.date-picker__row--selected")))
-    fecha_lunes_str = fila_seleccionada.get_attribute("data-monday")
-    
-    fecha_lunes = datetime.strptime(fecha_lunes_str, "%Y-%m-%d")
-    fecha_lunes_anterior = fecha_lunes - timedelta(days=7)
-    fecha_lunes_anterior_str = fecha_lunes_anterior.strftime("%Y-%m-%d")
-    dia_a_clickear = str(fecha_lunes_anterior.day)
+        boton_filtro = driver.find_element(By.CSS_SELECTOR, "button.js-filter-btn")
+        driver.execute_script("arguments[0].click();", boton_filtro)
+        time.sleep(1.5)
 
-    selector_fila_anterior = f"tr.date-picker__row[data-monday='{fecha_lunes_anterior_str}']"
-    fila_anterior = driver.find_element(By.CSS_SELECTOR, selector_fila_anterior)
-    elemento_dia = fila_anterior.find_element(By.XPATH, f".//span[@class='date-picker__cell-data' and normalize-space(text())='{dia_a_clickear}']")
-    driver.execute_script("arguments[0].click();", elemento_dia)
+        boton_fecha = driver.find_element(By.CSS_SELECTOR, "button[data-target-screen='date']")
+        driver.execute_script("arguments[0].click();", boton_fecha)
+        time.sleep(1.5)
 
-    boton_ver = driver.find_element(By.CSS_SELECTOR, "button.js-filter-close")
-    driver.execute_script("arguments[0].click();", boton_ver)
-    
-    print("Esperando a que la página recargue los datos de la semana anterior...")
-    time.sleep(4) 
-    
-    # 3. EXTRAER SEMANA ANTERIOR
-    cargar_jugadoras(driver, MAX_JUGADORAS)
-    time.sleep(1)
-    datos_anteriores = extraer_datos_ranking(driver)
-    
-    driver.quit()
+        espera = WebDriverWait(driver, 10)
+        fila_actual = espera.until(EC.presence_of_element_located((By.CSS_SELECTOR, "tr.date-picker__row--selected")))
+        lunes_actual = datetime.strptime(fila_actual.get_attribute("data-monday"), "%Y-%m-%d")
+        lunes_anterior = lunes_actual - timedelta(days=7)
+        selector = "tr.date-picker__row[data-monday='" + lunes_anterior.strftime("%Y-%m-%d") + "']"
+        fila_anterior = driver.find_element(By.CSS_SELECTOR, selector)
+        dia = str(lunes_anterior.day)
+        casilla = fila_anterior.find_element(By.XPATH, ".//span[@class='date-picker__cell-data' and normalize-space(text())='" + dia + "']")
+        driver.execute_script("arguments[0].click();", casilla)
 
-    # 4. COMPARACIONES
-    cambios_puntos = []
-    cambios_rank = []
+        boton_ver = driver.find_element(By.CSS_SELECTOR, "button.js-filter-close")
+        driver.execute_script("arguments[0].click();", boton_ver)
+        time.sleep(4)
+
+        cargar_jugadoras(driver, limite)
+        time.sleep(1)
+        datos_anteriores = extraer_datos_ranking(driver)
+    finally:
+        driver.quit()
+
+    ganadores_puntos = []
+    perdedores_puntos = []
+    subidas_puestos = []
+    bajadas_puestos = []
 
     for nombre, actual in datos_actuales.items():
-        if nombre in datos_anteriores:
-            anterior = datos_anteriores[nombre]
-            
-            diff_puntos = actual["puntos"] - anterior["puntos"]
-            if diff_puntos != 0:
-                cambios_puntos.append({"nombre": nombre, "diff": diff_puntos, "actual": actual["puntos"], "anterior": anterior["puntos"]})
-            
-            diff_rank = anterior["rank"] - actual["rank"]
-            if diff_rank != 0:
-                cambios_rank.append({"nombre": nombre, "diff": diff_rank, "actual": actual["rank"], "anterior": anterior["rank"]})
+        if nombre not in datos_anteriores:
+            continue
+        anterior = datos_anteriores[nombre]
+        puntos = actual["puntos"] - anterior["puntos"]
+        puestos = anterior["rank"] - actual["rank"]
 
-    ganadores_pts = [p for p in cambios_puntos if p["diff"] > 0]
-    perdedores_pts = [p for p in cambios_puntos if p["diff"] < 0]
-    subieron_rank = [r for r in cambios_rank if r["diff"] > 0]
-    bajaron_rank = [r for r in cambios_rank if r["diff"] < 0]
+        if puntos > 0:
+            ganadores_puntos.append({"nombre": nombre, "diferencia": puntos})
+        elif puntos < 0:
+            perdedores_puntos.append({"nombre": nombre, "diferencia": puntos})
+        if puestos > 0:
+            subidas_puestos.append({"nombre": nombre, "diferencia": puestos})
+        elif puestos < 0:
+            bajadas_puestos.append({"nombre": nombre, "diferencia": puestos})
 
-    top_ganadores_puntos = sorted(ganadores_pts, key=lambda x: x["diff"], reverse=True)[:10]
-    top_perdedores_puntos = sorted(perdedores_pts, key=lambda x: x["diff"])[:10]
-    top_subieron_rank = sorted(subieron_rank, key=lambda x: x["diff"], reverse=True)[:10]
-    top_bajaron_rank = sorted(bajaron_rank, key=lambda x: x["diff"])[:10]
+    def diferencia(jugadora):
+        return jugadora["diferencia"]
 
-    # ==========================================
-    # 5. MOSTRAR RESULTADOS (FORMATO LISTA)
-    # ==========================================
-    print("\n" + "="*50)
-    print("🏆 TOP 10 - JUGADORAS QUE MÁS PUNTOS HAN GANADO")
-    print("="*50)
-    if not top_ganadores_puntos:
-        print("No hubo jugadoras que ganaran puntos.")
-    else:
-        for i, p in enumerate(top_ganadores_puntos, 1):
-            print(f"{i}. {p['nombre']} (+{p['diff']} pts)")
+    ganadores_puntos.sort(key=diferencia, reverse=True)
+    perdedores_puntos.sort(key=diferencia)
+    subidas_puestos.sort(key=diferencia, reverse=True)
+    bajadas_puestos.sort(key=diferencia)
 
-    print("\n" + "="*50)
-    print("📉 TOP 10 - JUGADORAS QUE MÁS PUNTOS HAN PERDIDO")
-    print("="*50)
-    if not top_perdedores_puntos:
-        print("No hubo jugadoras que perdieran puntos.")
-    else:
-        for i, p in enumerate(top_perdedores_puntos, 1):
-            print(f"{i}. {p['nombre']} ({p['diff']} pts)")
-
-    print("\n" + "="*50)
-    print("🚀 TOP 10 - JUGADORAS QUE MÁS PUESTOS HAN SUBIDO")
-    print("="*50)
-    if not top_subieron_rank:
-        print("Nadie subió puestos esta semana.")
-    else:
-        for i, r in enumerate(top_subieron_rank, 1):
-            print(f"{i}. {r['nombre']} (+{r['diff']} puestos)")
-
-    print("\n" + "="*50)
-    print("⚠️ TOP 10 - JUGADORAS QUE MÁS PUESTOS HAN BAJADO")
-    print("="*50)
-    if not top_bajaron_rank:
-        print("Nadie bajó puestos esta semana.")
-    else:
-        for i, r in enumerate(top_bajaron_rank, 1):
-            print(f"{i}. {r['nombre']} ({r['diff']} puestos)")
+    return {
+        "ganadores_puntos": ganadores_puntos[:cantidad],
+        "perdedores_puntos": perdedores_puntos[:cantidad],
+        "subidas_puestos": subidas_puestos[:cantidad],
+        "bajadas_puestos": bajadas_puestos[:cantidad]
+    }

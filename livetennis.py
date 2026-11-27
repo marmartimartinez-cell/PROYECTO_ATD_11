@@ -1,8 +1,6 @@
 import requests
 from bs4 import BeautifulSoup
-import csv
 import unicodedata
-from datetime import date
 
 
 def normalizar_nombre(nombre):
@@ -23,21 +21,21 @@ def extraer_live_tennis():
     try:
         respuesta = requests.get(url, headers=cabeceras, timeout=20)
         respuesta.raise_for_status()
-        print('Código de estado:', respuesta.status_code)
     except requests.exceptions.RequestException as e:
-        print('Error al descargar la página:', e)
-        return []
+        raise RuntimeError('Error al descargar Live Tennis: ' + str(e)) from e
 
     # 2. Leer el HTML y buscar los nombres de las jugadoras
-    soup = BeautifulSoup(respuesta.content, 'lxml')
+    soup = BeautifulSoup(respuesta.content, 'html.parser')
     nombres = soup.find_all('td', class_='pn')
-    print('Jugadoras encontradas:', len(nombres))
 
     # 3. Recorrer las jugadoras y guardar sus datos en una lista
     jugadoras = []
     for nombre in nombres:
         fila = nombre.find_parent('tr')
         celdas = fila.find_all('td')
+
+        if len(celdas) < 8:
+            continue
 
         jugadoras.append({
             'ranking': celdas[0].get_text(strip=True),
@@ -49,26 +47,6 @@ def extraer_live_tennis():
             'cambio': celdas[7].get_text(strip=True)
         })
 
+    if not jugadoras:
+        raise ValueError("Live Tennis no ha devuelto jugadoras. Puede haber cambiado el HTML.")
     return jugadoras
-
-
-def guardar_csv(jugadoras):
-    # 4. Guardar las jugadoras en un CSV con la fecha de hoy en el nombre
-    nombre_fichero = 'ranking_livetennis_' + str(date.today()) + '.csv'
-    fichero = open(nombre_fichero, 'w', newline='', encoding='utf-8-sig')
-    escritor = csv.writer(fichero, delimiter=';')
-    escritor.writerow(['ranking', 'nombre', 'nombre_normalizado', 'edad', 'pais', 'puntos', 'cambio'])
-
-    for j in jugadoras:
-        escritor.writerow([j['ranking'], j['nombre'], j['nombre_normalizado'], j['edad'], j['pais'], j['puntos'], j['cambio']])
-
-    fichero.close()
-    print('Guardado en', nombre_fichero)
-
-
-# Esto solo se ejecuta si lanzas este fichero directamente (py livetennisbueno.py)
-if __name__ == '__main__':
-    jugadoras = extraer_live_tennis()
-    for j in jugadoras[:15]:
-        print(j['ranking'], j['nombre'], '->', j['nombre_normalizado'], j['pais'], j['puntos'], j['cambio'])
-    guardar_csv(jugadoras)

@@ -34,12 +34,3 @@ def predecir_partido(nombre1, nombre2, superficie):
         "jugadora2": nombre2,
         "elo2": elo2,
         "probabilidad2": round(prob2 * 100, 2)}
-
-
-
-
-######### EL CÓDIGO DE ABAJO DEBE IR EN EL SERVIDOR
-resultado = predecir_partido("Aryna Sabalenka", "Coco Gauff", "arcilla")
-
-print(resultado["jugadora1"], ":", resultado["probabilidad1"], "%")
-print(resultado["jugadora2"], ":", resultado["probabilidad2"], "%")

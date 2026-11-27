@@ -44,12 +44,3 @@ def comparar_jugadoras(nombre1, nombre2):
             resultados[superficie] = None
 
     return resultados
-
-resultado = comparar_jugadoras("Aryna Sabalenka", "Coco Gauff")
-
-for superficie in resultado:
-
-    if resultado[superficie] is not None:
-        print("\n", superficie.upper())
-        print("Aryna Sabalenka:", resultado[superficie]["probabilidad1"], "%")
-        print("Coco Gauff:", resultado[superficie]["probabilidad2"], "%")

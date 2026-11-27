@@ -63,19 +63,3 @@ def comparar_rankings(cantidad=10, top=100):
         "sobrevaloradas": sobrevaloradas[-cantidad:][::-1],
         "sin_cruzar": sin_cruzar
     }
-
-
-# Esto solo se ejecuta si lanzas este fichero directamente (py tabstract_ltennis.py)
-if __name__ == '__main__':
-    resultado = comparar_rankings(10)
-
-    print("\nJUGADORAS INFRAVALORADAS (mejor en Elo que en la WTA)")
-    for j in resultado["infravaloradas"]:
-        print(j["nombre"], "| WTA:", j["ranking_wta"], "| Elo:", j["ranking_elo"], "| Diferencia:", j["diferencia"])
-
-    print("\nJUGADORAS SOBREVALORADAS (peor en Elo que en la WTA)")
-    for j in resultado["sobrevaloradas"]:
-        print(j["nombre"], "| WTA:", j["ranking_wta"], "| Elo:", j["ranking_elo"], "| Diferencia:", j["diferencia"])
-
-    print("\nJugadoras del top que no se han podido cruzar:", len(resultado["sin_cruzar"]))
-    print(resultado["sin_cruzar"])

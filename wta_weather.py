@@ -40,18 +40,16 @@ def cerrar_popup_weblayer(driver, nombre_clase_popup):
     return False
 
 
-def extraer_wta(nombres_torneos):
-    # Acepta tanto un nombre como una lista de nombres.
-    if isinstance(nombres_torneos, str):
-        nombres_torneos = [nombres_torneos]
-
+def obtener_catalogo_torneos():
     driver = abrir_Web_WTA("https://www.wtatennis.com/tournaments")
     tournaments = {}
-
     try:
         try:
-            cambio_all = driver.find_element(By.CLASS_NAME, "tournament-list__status-filter")
-            cambio_all.click()
+            filtro = driver.find_element(By.CLASS_NAME, "tournament-list__status-filter")
+            try:
+                filtro.click()
+            except Exception:
+                driver.execute_script("arguments[0].click();", filtro)
         except Exception:
             pass
 
@@ -66,14 +64,24 @@ def extraer_wta(nombres_torneos):
         driver.quit()
 
     if not tournaments:
-        raise ValueError("No se han cargado los torneos de la WTA. Revisad el filtro 'All' o el selector HTML.")
+        raise ValueError("La WTA no ha devuelto torneos. Revisad la web y los selectores de Selenium.")
+    return tournaments
 
+
+def listar_torneos():
+    # Devuelve los nombres tal como aparecen ahora en la WTA.
+    return sorted(obtener_catalogo_torneos(), key=str.casefold)
+
+
+def extraer_wta(nombres_torneos):
+    if isinstance(nombres_torneos, str):
+        nombres_torneos = [nombres_torneos]
+
+    tournaments = obtener_catalogo_torneos()
     torneoDatos = {}
 
-    # Solo visitamos las páginas de los torneos pedidos.
     for nombre_torneo in nombres_torneos:
         nombre_encontrado = None
-
         for nombre in tournaments:
             if nombre.strip().casefold() == nombre_torneo.strip().casefold():
                 nombre_encontrado = nombre
@@ -87,12 +95,10 @@ def extraer_wta(nombres_torneos):
             if len(coincidencias) == 1:
                 nombre_encontrado = coincidencias[0]
             elif len(coincidencias) > 1:
-                print("Nombre ambiguo:", nombre_torneo, "- Opciones:", coincidencias)
-                continue
+                raise ValueError("Nombre de torneo ambiguo: " + nombre_torneo + ". Coincidencias: " + ", ".join(coincidencias))
 
         if nombre_encontrado is None:
-            print("No se ha encontrado el torneo:", nombre_torneo)
-            continue
+            raise ValueError("No se ha encontrado el torneo: " + nombre_torneo)
 
         driver = abrir_Web_WTA(tournaments[nombre_encontrado])
         try:
@@ -100,7 +106,6 @@ def extraer_wta(nombres_torneos):
             categoria = driver.find_element(By.CLASS_NAME, "tournament-header__tournament-level").get_attribute("alt")
             superficie = driver.find_element(By.CLASS_NAME, "tournament-header__details-surface").text
             fecha = driver.find_element(By.CSS_SELECTOR, "div.tournament-header__date-range").text
-
             torneoDatos[nombre_encontrado] = {
                 "Ciudad": ciudad,
                 "Categoria": categoria,
@@ -111,8 +116,3 @@ def extraer_wta(nombres_torneos):
             driver.quit()
 
     return torneoDatos
-
-
-if __name__ == "__main__":
-    torneos = ["Mutua Madrid Open", "Dubai Duty Free Tennis Championships"]
-    print(extraer_wta(torneos))
