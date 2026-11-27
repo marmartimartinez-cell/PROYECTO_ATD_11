@@ -20,11 +20,3 @@ def mejores_superficie(superficie, cantidad):
     ranking.sort(key=obtener_elo, reverse=True)
 
     return ranking[:cantidad]
-
-
-######### EL CÓDIGO DE ABAJO DEBE IR EN EL SERVIDOR
-superficie = "arcilla"
-respuesta = mejores_superficie(superficie, 50)
-print(f"Ranking de jugadoras en función de la superficie: {superficie}")
-for i, jugadora in enumerate(respuesta):
-    print(i+1, jugadora["nombre"], ":", jugadora["elo"])
